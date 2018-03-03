@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import ArtistArtifact from '../build/contracts/Artist.json';
+import ArtistContract from '../build/contracts/Artist.json';
 const contract = require('truffle-contract');
 import getWeb3 from './utils/getWeb3';
 import {
@@ -14,11 +14,10 @@ import {
   CardText,
   Button,
   Dialog,
-  Input
+  Input,
+  ProgressBar as Spinner
 } from 'react-toolbox';
-
 import bands from './bands.js';
-
 const EthIcon = ({ style }) => (
   <svg width="24px" height="24px" viewBox="0 0 256 417" style={style}>
     <g>
@@ -49,8 +48,7 @@ const EthIcon = ({ style }) => (
     </g>
   </svg>
 );
-
-const Cards = ({ artists, onInvest, onDetails, balance, goal }) => (
+const Cards = ({ artists, onInvest, onDetails, balance, goal, spinner }) => (
   <div
     style={{
       display: 'flex',
@@ -64,14 +62,14 @@ const Cards = ({ artists, onInvest, onDetails, balance, goal }) => (
         <CardTitle />
         <CardMedia aspectRatio="wide" image={artist.picture} />
         <CardTitle title={artist.name} subtitle={artist.genre} />
-        {/* Balance only for first Card for demo purposes */}
         <CardText>
           Help <b>{artist.name}</b> raise ETH and be part of their success!
         </CardText>
         <CardText>Goal: {index === 0 ? goal : artist.goal} ETH</CardText>
         <CardText>
           <EthIcon style={{ marginBottom: '-5px' }} />{' '}
-          {`${index === 0 ? balance : artist.balance} ETH raised so far.`}
+          {`${index === 0 ? balance : artist.balance} raised so far.`}
+          {index === 0 && spinner && <Spinner type="circular" />}
         </CardText>
         <CardActions>
           <Button label="Invest" onClick={onInvest} />
@@ -81,7 +79,6 @@ const Cards = ({ artists, onInvest, onDetails, balance, goal }) => (
     ))}
   </div>
 );
-
 class App extends Component {
   state = {
     // drawerActive: false,
@@ -89,13 +86,12 @@ class App extends Component {
     goal: 0,
     dialogActive: false,
     inputValue: 0,
-
     storageValue: 0,
-    web3: null
+    web3: null,
+    spinner: false
   };
   web3Provider = null;
   contracts = {};
-
   toggleDialog = () => {
     const dialogActive = !this.state.dialogActive;
     this.setState({
@@ -103,11 +99,9 @@ class App extends Component {
       inputValue: dialogActive ? '' : this.state.inputValue
     });
   };
-
   componentWillMount() {
     // Get network provider and web3 instance.
     // See utils/getWeb3 for more info.
-
     getWeb3
       .then(results => {
         this.setState(
@@ -118,54 +112,61 @@ class App extends Component {
             this.instantiateContract();
           }
         );
-
         // Instantiate contract once web3 provided.
       })
       .catch(() => {
         console.log('Error finding web3.');
       });
   }
-
   instantiateContract = () => {
-    this.contracts.Artist = contract(ArtistArtifact.abi);
+    this.artist = contract(ArtistContract);
+    this.artist.setProvider(this.state.web3.currentProvider);
     // Set the provider for our contract
-    this.contracts.Artist.setProvider(this.state.web3.currentProvider);
     this.getBalance();
     this.getGoal();
   };
-
   handleInvest = () => {
     const { inputValue: investAmount } = this.state;
-    var artistInstance;
-
+    this.setState({
+      dialogActive: false,
+      spinner: true
+    });
     // gets metamask accounts of logged user
+
     this.state.web3.eth.getAccounts((error, accounts) => {
       if (error) {
         console.log(error);
       }
-
-      this.contracts.Artist.deployed()
-        .then(function(instance) {
-          artistInstance = instance;
-
-          // Execute adopt as a transaction by sending account
-          return artistInstance.makeInvestment(investAmount, {
-            gas: 300000,
-            from: accounts[0],
-            value: this.state.web3.toWei(investAmount, 'ether')
-          });
+      this.artist
+        .deployed()
+        .then(instance => {
+          return instance
+            .makeInvestment(investAmount, {
+              gas: 3000000,
+              from: accounts[0],
+              value: this.state.web3.toWei(investAmount, 'ether')
+            })
+            .then(result => {
+              console.log(result);
+              this.setState({
+                balance: this.state.balance + investAmount * 10000,
+                spinner: false
+              });
+            });
         })
         .catch(function(err) {
           console.log(err.message);
         });
     });
   };
-
   getBalance = () => {
-    this.contracts.Artist.deployed()
+    this.artist
+      .deployed()
       .then(instance => {
-        this.setState({
-          balance: instance.getContractBalance.call()
+        instance.getContractBalance.call().then(result => {
+          this.setState({
+            balance: result.c[0]
+          });
         });
       })
       .catch(function(err) {
@@ -173,13 +174,14 @@ class App extends Component {
       });
   };
   getGoal = () => {
-    this.contracts.Artist.deployed().then(instance => {
-      this.setState({
-        goal: instance.goal.call()
+    this.artist.deployed().then(instance => {
+      instance.goal.call().then(result => {
+        this.setState({
+          goal: result.c[0]
+        });
       });
     });
   };
-
   render() {
     return (
       <Layout>
@@ -209,6 +211,7 @@ class App extends Component {
               onInvest={this.toggleDialog}
               balance={this.state.balance}
               goal={this.state.goal}
+              spinner={this.state.spinner}
             />
           </div>
         </Panel>
@@ -239,5 +242,4 @@ class App extends Component {
     );
   }
 }
-
 export default App;
