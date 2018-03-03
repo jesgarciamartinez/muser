@@ -1,8 +1,6 @@
 import React, { Component } from 'react';
-import SimpleStorageContract from '../build/contracts/SimpleStorage.json';
 import ArtistArtifact from '../build/contracts/Artist.json';
 const contract = require('truffle-contract');
-
 import getWeb3 from './utils/getWeb3';
 import {
   AppBar,
@@ -21,7 +19,38 @@ import {
 
 import bands from './bands.js';
 
-const Cards = ({ artists, onInvest, onDetails }) => (
+const EthIcon = ({ style }) => (
+  <svg width="24px" height="24px" viewBox="0 0 256 417" style={style}>
+    <g>
+      <polygon
+        fill="#343434"
+        points="127.9611 0 125.1661 9.5 125.1661 285.168 127.9611 287.958 255.9231 212.32"
+      />
+      <polygon
+        fill="#8C8C8C"
+        points="127.962 0 0 212.32 127.962 287.959 127.962 154.158"
+      />
+      <polygon
+        fill="#3C3C3B"
+        points="127.9611 312.1866 126.3861 314.1066 126.3861 412.3056 127.9611 416.9066 255.9991 236.5866"
+      />
+      <polygon
+        fill="#8C8C8C"
+        points="127.962 416.9052 127.962 312.1852 0 236.5852"
+      />
+      <polygon
+        fill="#141414"
+        points="127.9611 287.9577 255.9211 212.3207 127.9611 154.1587"
+      />
+      <polygon
+        fill="#393939"
+        points="0.0009 212.3208 127.9609 287.9578 127.9609 154.1588"
+      />
+    </g>
+  </svg>
+);
+
+const Cards = ({ artists, onInvest, onDetails, balance, goal }) => (
   <div
     style={{
       display: 'flex',
@@ -30,13 +59,19 @@ const Cards = ({ artists, onInvest, onDetails }) => (
       width: '100%'
     }}
   >
-    {artists.map(artist => (
-      <Card id={artist.id} style={{ width: '30%', margin: '1rem' }}>
+    {artists.map((artist, index) => (
+      <Card key={artist.id} style={{ width: '30%', margin: '1rem' }}>
         <CardTitle />
         <CardMedia aspectRatio="wide" image={artist.picture} />
         <CardTitle title={artist.name} subtitle={artist.genre} />
+        {/* Balance only for first Card for demo purposes */}
         <CardText>
           Help <b>{artist.name}</b> raise ETH and be part of their success!
+        </CardText>
+        <CardText>Goal: {index === 0 ? goal : artist.goal} ETH</CardText>
+        <CardText>
+          <EthIcon style={{ marginBottom: '-5px' }} />{' '}
+          {`${index === 0 ? balance : artist.balance} ETH raised so far.`}
         </CardText>
         <CardActions>
           <Button label="Invest" onClick={onInvest} />
@@ -51,12 +86,15 @@ class App extends Component {
   state = {
     // drawerActive: false,
     balance: 0,
+    goal: 0,
     dialogActive: false,
     inputValue: 0,
 
     storageValue: 0,
     web3: null
   };
+  web3Provider = null;
+  contracts = {};
 
   toggleDialog = () => {
     const dialogActive = !this.state.dialogActive;
@@ -66,41 +104,47 @@ class App extends Component {
     });
   };
 
-  componentDidMount() {
+  componentWillMount() {
     // Get network provider and web3 instance.
     // See utils/getWeb3 for more info.
 
     getWeb3
       .then(results => {
-        this.setState({
-          web3: results.web3
-        });
+        this.setState(
+          {
+            web3: results.web3
+          },
+          () => {
+            this.instantiateContract();
+          }
+        );
 
         // Instantiate contract once web3 provided.
-        this.instantiateContract();
       })
       .catch(() => {
         console.log('Error finding web3.');
       });
   }
 
-  instantiateContract() {
-    this.contracts.Artist = contract(ArtistArtifact);
+  instantiateContract = () => {
+    this.contracts.Artist = contract(ArtistArtifact.abi);
     // Set the provider for our contract
-    this.contracts.Artist.setProvider(App.web3Provider);
+    this.contracts.Artist.setProvider(this.state.web3.currentProvider);
     this.getBalance();
-  }
-  handleInvest() {
+    this.getGoal();
+  };
+
+  handleInvest = () => {
     const { inputValue: investAmount } = this.state;
     var artistInstance;
 
     // gets metamask accounts of logged user
-    this.state.web3.eth.getAccounts(function(error, accounts) {
+    this.state.web3.eth.getAccounts((error, accounts) => {
       if (error) {
         console.log(error);
       }
 
-      App.contracts.Artist.deployed()
+      this.contracts.Artist.deployed()
         .then(function(instance) {
           artistInstance = instance;
 
@@ -111,16 +155,13 @@ class App extends Component {
             value: this.state.web3.toWei(investAmount, 'ether')
           });
         })
-        .then(function(result) {
-          return App.markAdopted();
-        })
         .catch(function(err) {
           console.log(err.message);
         });
     });
-  }
+  };
 
-  getBalance() {
+  getBalance = () => {
     this.contracts.Artist.deployed()
       .then(instance => {
         this.setState({
@@ -130,7 +171,14 @@ class App extends Component {
       .catch(function(err) {
         console.log(err.message);
       });
-  }
+  };
+  getGoal = () => {
+    this.contracts.Artist.deployed().then(instance => {
+      this.setState({
+        goal: instance.goal.call()
+      });
+    });
+  };
 
   render() {
     return (
@@ -156,7 +204,12 @@ class App extends Component {
               padding: '1.8rem'
             }}
           >
-            <Cards artists={bands} onInvest={this.toggleDialog} />
+            <Cards
+              artists={bands}
+              onInvest={this.toggleDialog}
+              balance={this.state.balance}
+              goal={this.state.goal}
+            />
           </div>
         </Panel>
         <Dialog
