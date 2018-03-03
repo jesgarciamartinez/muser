@@ -1,5 +1,8 @@
 import React, { Component } from 'react';
 import SimpleStorageContract from '../build/contracts/SimpleStorage.json';
+import ArtistArtifact from '../build/contracts/Artist.json';
+const contract = require('truffle-contract');
+
 import getWeb3 from './utils/getWeb3';
 import {
   AppBar,
@@ -32,9 +35,9 @@ const Cards = ({ artists, onInvest, onDetails }) => (
         <CardTitle />
         <CardMedia aspectRatio="wide" image={artist.picture} />
         <CardTitle title={artist.name} subtitle={artist.genre} />
-        <CardText>{"Help "
-          +artist.name+
-         "raise ETH and be part of their success!"}</CardText>
+        <CardText>
+          Help <b>{artist.name}</b> raise ETH and be part of their success!
+        </CardText>
         <CardActions>
           <Button label="Invest" onClick={onInvest} />
           <Button label="Details" onClick={onDetails} />
@@ -47,19 +50,23 @@ const Cards = ({ artists, onInvest, onDetails }) => (
 class App extends Component {
   state = {
     // drawerActive: false,
+    balance: 0,
     dialogActive: false,
+    inputValue: 0,
 
     storageValue: 0,
     web3: null
   };
 
   toggleDialog = () => {
+    const dialogActive = !this.state.dialogActive;
     this.setState({
-      dialogActive: !this.state.dialogActive
+      dialogActive,
+      inputValue: dialogActive ? '' : this.state.inputValue
     });
   };
 
-  componentWillMount() {
+  componentDidMount() {
     // Get network provider and web3 instance.
     // See utils/getWeb3 for more info.
 
@@ -78,30 +85,13 @@ class App extends Component {
   }
 
   instantiateContract() {
-    const contract = require('truffle-contract')
-
-    $.getJSON('Artist.json', function(data) {
-      // Get the necessary contract artifact file and instantiate it with truffle-contract
-      var ArtistArtifact = data;
-      App.contracts.Artist = TruffleContract(AdoptionArtifact);
-
-      // Set the provider for our contract
-      App.contracts.Artist.setProvider(App.web3Provider);
-      return App.getBalance();
-    });
-
-    return App.bindEvents();
+    this.contracts.Artist = contract(ArtistArtifact);
+    // Set the provider for our contract
+    this.contracts.Artist.setProvider(App.web3Provider);
+    this.getBalance();
   }
-
-  bindEvents () {
-    $(document).on('click', '.btn-invest', App.handleInvest);
-  },
-
-  handleInvest(event) {
-    event.preventDefault();
-
-    var investAmount = parseInt($(event.target).data('amount'));
-
+  handleInvest() {
+    const { inputValue: investAmount } = this.state;
     var artistInstance;
 
     // gets metamask accounts of logged user
@@ -110,34 +100,37 @@ class App extends Component {
         console.log(error);
       }
 
-      var account = accounts[0];
+      App.contracts.Artist.deployed()
+        .then(function(instance) {
+          artistInstance = instance;
 
-      App.contracts.Artist.deployed().then(function(instance) {
-        artistInstance = instance;
-
-        // Execute adopt as a transaction by sending account
-        return adoptionInstance.makeInvestment(investAmount, {from: account});
-      }).then(function(result) {
-        return App.markAdopted();
-      }).catch(function(err) {
-        console.log(err.message);
-      });
+          // Execute adopt as a transaction by sending account
+          return artistInstance.makeInvestment(investAmount, {
+            gas: 300000,
+            from: accounts[0],
+            value: this.state.web3.toWei(investAmount, 'ether')
+          });
+        })
+        .then(function(result) {
+          return App.markAdopted();
+        })
+        .catch(function(err) {
+          console.log(err.message);
+        });
     });
   }
 
-  getBalance(balance) {
-    var artistInstance;
-
-    App.contracts.Artist.deployed().then(function(instance) {
-      artistInstance = instance;
-
-      return artistInstance.getContractBalance.call();
-    }).then(function(balance) {
-      return balance;
-    }).catch(function(err) {
-      console.log(err.message);
-    });
-  },
+  getBalance() {
+    this.contracts.Artist.deployed()
+      .then(instance => {
+        this.setState({
+          balance: instance.getContractBalance.call()
+        });
+      })
+      .catch(function(err) {
+        console.log(err.message);
+      });
+  }
 
   render() {
     return (
@@ -172,7 +165,22 @@ class App extends Component {
           onOverlayClick={this.toggleDialog}
           title={'Enter an ETH amount'}
         >
-          <Input type={'number'} />
+          <form>
+            <Input
+              type={'number'}
+              value={this.state.inputValue}
+              label={'ETH'}
+              onChange={inputValue => {
+                this.setState({ inputValue });
+              }}
+              innerRef={input => {
+                if (!input) return;
+                input.focus();
+              }}
+            />
+            <Button label={'Ok!'} primary raised onClick={this.handleInvest} />
+            <Button label={'Cancel'} accent onClick={this.toggleDialog} />
+          </form>
         </Dialog>
       </Layout>
     );
