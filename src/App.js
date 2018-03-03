@@ -3,27 +3,22 @@ import SimpleStorageContract from '../build/contracts/SimpleStorage.json';
 import getWeb3 from './utils/getWeb3';
 import {
   AppBar,
-  // Checkbox,
-  // IconButton,
   Layout,
   NavDrawer,
   Panel,
-  // Sidebar,
   Card,
   CardTitle,
   CardMedia,
   CardActions,
   CardText,
-  Button
+  Button,
+  Dialog,
+  Input
 } from 'react-toolbox';
 
-// import './css/oswald.css';
-// import './css/open-sans.css';
-// import './css/pure-min.css';
-// import './App.css';
 import bands from './bands.js';
 
-const Cards = () => (
+const Cards = ({ artists, onInvest, onDetails }) => (
   <div
     style={{
       display: 'flex',
@@ -32,21 +27,17 @@ const Cards = () => (
       width: '100%'
     }}
   >
-    {bands.map(band => (
-      <Card id={band.id} style={{ width: '30%', margin: '1rem' }}>
-        <CardTitle
-        // avatar={band.picture}
-        // title={band.name}
-        // subtitle={band.genre}
-        />
-        <CardMedia aspectRatio="wide" image={band.picture} />
-        <CardTitle title={band.name} subtitle={band.genre} />
+    {artists.map(artist => (
+      <Card id={artist.id} style={{ width: '30%', margin: '1rem' }}>
+        <CardTitle />
+        <CardMedia aspectRatio="wide" image={artist.picture} />
+        <CardTitle title={artist.name} subtitle={artist.genre} />
         <CardText>{`Help ${
-          band.name
+          artist.name
         } raise ETH and be part of their success!`}</CardText>
         <CardActions>
-          <Button label="Action 1" />
-          <Button label="Action 2" />
+          <Button label="Invest" onClick={onInvest} />
+          <Button label="Details" onClick={onDetails} />
         </CardActions>
       </Card>
     ))}
@@ -55,25 +46,19 @@ const Cards = () => (
 
 class App extends Component {
   state = {
-    drawerActive: false,
-    drawerPinned: false,
-    sidebarPinned: false,
+    // drawerActive: false,
+    dialogActive: false,
 
     storageValue: 0,
     web3: null
   };
 
-  toggleDrawerActive = () => {
-    this.setState({ drawerActive: !this.state.drawerActive });
+  toggleDialog = () => {
+    this.setState({
+      dialogActive: !this.state.dialogActive
+    });
   };
 
-  toggleDrawerPinned = () => {
-    this.setState({ drawerPinned: !this.state.drawerPinned });
-  };
-
-  toggleSidebar = () => {
-    this.setState({ sidebarPinned: !this.state.sidebarPinned });
-  };
   componentWillMount() {
     // Get network provider and web3 instance.
     // See utils/getWeb3 for more info.
@@ -142,7 +127,7 @@ class App extends Component {
         <Panel>
           <AppBar
             leftIcon="menu"
-            title={'Nodon'}
+            title={'Muser'}
             onLeftIconClick={this.toggleDrawerActive}
           />
           <div
@@ -152,27 +137,17 @@ class App extends Component {
               padding: '1.8rem'
             }}
           >
-            <Cards />
-            {/* <Checkbox
-                            label="Pin drawer"
-                            checked={this.state.drawerPinned}
-                            onChange={this.toggleDrawerPinned}
-                        />
-                        <Checkbox
-                            label="Show sidebar"
-                            checked={this.state.sidebarPinned}
-                            onChange={this.toggleSidebar}
-                        /> */}
+            <Cards artists={bands} onInvest={this.toggleDialog} />
           </div>
         </Panel>
-        {/* <Sidebar pinned={this.state.sidebarPinned} width={5}>
-                    <div>
-                        <IconButton icon="close" onClick={this.toggleSidebar} />
-                    </div>
-                    <div style={{ flex: 1 }}>
-                        <p>Supplemental content goes here.</p>
-                    </div>
-                </Sidebar> */}
+        <Dialog
+          active={this.state.dialogActive}
+          onEscKeyDown={this.toggleDialog}
+          onOverlayClick={this.toggleDialog}
+          title={'Enter an ETH amount'}
+        >
+          <Input type={'number'} />
+        </Dialog>
       </Layout>
     );
   }
